@@ -23,6 +23,7 @@ def train():
 
     episode_rewards = []
     episode_steps = []
+    q_snapshots = {}  # stores Q-table copies at intervals, for animating training progress
 
     print("Starting training...\n")
 
@@ -45,6 +46,10 @@ def train():
         episode_rewards.append(total_reward)
         episode_steps.append(step + 1)
 
+        # Save a snapshot of the Q-table every 50 episodes
+        if (episode + 1) % 50 == 0:
+            q_snapshots[episode + 1] = agent.q_table.copy()
+
         if (episode + 1) % 100 == 0:
             avg_reward = np.mean(episode_rewards[-100:])
             avg_steps = np.mean(episode_steps[-100:])
@@ -59,7 +64,11 @@ def train():
     np.save('results/q_table.npy', agent.q_table)
     np.save('results/episode_rewards.npy', np.array(episode_rewards))
     np.save('results/episode_steps.npy', np.array(episode_steps))
-    print("Q-table and metrics saved to results/ folder.")
+
+    # Save all snapshots into one compressed file
+    np.savez('results/q_snapshots.npz', **{str(k): v for k, v in q_snapshots.items()})
+
+    print("Q-table, metrics, and training snapshots saved to results/ folder.")
 
 
 def visualize_results():
