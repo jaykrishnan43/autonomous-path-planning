@@ -67,10 +67,11 @@ def run():
     save_scenario('grid_15x15', 15, obstacles_15, (0, 0), (14, 14), q)
 
     # Scenario 3: 20x20 grid
-    print("Training: 20x20 grid...")
+    print("Training: 20x20 grid (extended episodes for full convergence)...")
     obstacles_20 = scale_obstacles(base_obstacles, 10, 20)
-    q = train_agent(20, obstacles_20, (0, 0), (19, 19))
+    q = train_agent(20, obstacles_20, (0, 0), (19, 19), episodes=3000)
     save_scenario('grid_20x20', 20, obstacles_20, (0, 0), (19, 19), q)
+    
 
     # Scenario 4: low obstacle density (5%) - using same generation logic as before
     import random
