@@ -9,28 +9,19 @@ from environment.grid_world import GridWorld
 from agent.q_learning_agent import QLearningAgent
 from collections import deque
 
-GRID_SIZE = 10
+GRID_SIZE = 20
 START = (0, 0)
-GOAL = (9, 9)
+GOAL = (19, 19)
 
-# NOTE: Densities above ~55-60% were tested but may be excluded from the final
-# comparison if no solvable layout is found. Random obstacle placement at these
-# densities becomes increasingly unlikely to produce a connected path from
-# corner to corner, consistent with 2D site percolation theory (critical
-# threshold ~59.3% for a square lattice). Above this threshold, the probability
-# of a connected path drops sharply toward zero, regardless of retries.
-
-NUM_EPISODES = 2000
-MAX_STEPS_PER_EPISODE = 500
+NUM_EPISODES = 3000
+MAX_STEPS_PER_EPISODE = 800
 SEED = 42
 
 
 def is_solvable(size, start, goal, obstacles):
-    """BFS check to confirm a path exists from start to goal."""
     obstacle_set = set(obstacles)
     visited = set([start])
     queue = deque([start])
-
     while queue:
         x, y = queue.popleft()
         if (x, y) == goal:
@@ -40,18 +31,13 @@ def is_solvable(size, start, goal, obstacles):
             if 0 <= nx < size and 0 <= ny < size and (nx, ny) not in obstacle_set and (nx, ny) not in visited:
                 visited.add((nx, ny))
                 queue.append((nx, ny))
-
     return False
 
 
 def generate_obstacles(size, start, goal, density, seed, max_attempts=300):
-    """Randomly generates obstacles at a given density. Returns (None, attempts)
-    if no solvable layout is found within max_attempts (rather than crashing) —
-    this itself is meaningful data near the percolation threshold."""
     rng = random.Random(seed)
     total_cells = size * size
     num_obstacles = int(total_cells * density)
-
     all_cells = [(x, y) for x in range(size) for y in range(size) if (x, y) != start and (x, y) != goal]
 
     for attempt in range(1, max_attempts + 1):
@@ -72,7 +58,6 @@ def train_with_obstacles(obstacles):
     for episode in range(NUM_EPISODES):
         state = env.reset()
         total_reward = 0
-
         for step in range(MAX_STEPS_PER_EPISODE):
             action = agent.choose_action(state)
             next_state, reward, done, _ = env.step(action)
@@ -81,7 +66,6 @@ def train_with_obstacles(obstacles):
             total_reward += reward
             if done:
                 break
-
         agent.decay_epsilon()
         episode_rewards.append(total_reward)
         episode_steps.append(step + 1)
@@ -90,7 +74,10 @@ def train_with_obstacles(obstacles):
 
 
 def run_comparison():
-    densities = [0.10, 0.30, 0.50, 0.55]  # near the ~59% percolation threshold for 2D grids
+    # Testing near the theoretical ~59.3% percolation threshold on a larger,
+    # less finite-size-affected grid
+    densities = [0.30, 0.35, 0.40, 0.45]
+
     results = {}
 
     for density in densities:
@@ -98,7 +85,7 @@ def run_comparison():
 
         if obstacles is None:
             print(f"SKIPPED {int(density*100)}% density: no solvable layout found in "
-                  f"{attempts_needed} attempts (likely past the percolation threshold for this grid).\n")
+                  f"{attempts_needed} attempts.\n")
             results[density] = None
             continue
 
@@ -110,7 +97,6 @@ def run_comparison():
         avg_final_steps = np.mean(steps[-100:])
         print(f"  Done. Final avg reward: {avg_final_reward:.2f}, final avg steps: {avg_final_steps:.2f}\n")
 
-    # Plot comparison
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
     for density in densities:
@@ -123,7 +109,7 @@ def run_comparison():
 
     axes[0].set_xlabel('Episode')
     axes[0].set_ylabel('Reward (20-episode rolling avg)')
-    axes[0].set_title('Reward Convergence by Obstacle Density')
+    axes[0].set_title('Reward Convergence by Obstacle Density (20x20 Grid)')
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
 
@@ -137,26 +123,26 @@ def run_comparison():
 
     axes[1].set_xlabel('Episode')
     axes[1].set_ylabel('Steps to Goal (20-episode rolling avg)')
-    axes[1].set_title('Steps Convergence by Obstacle Density')
+    axes[1].set_title('Steps Convergence by Obstacle Density (20x20 Grid)')
     axes[1].legend()
     axes[1].grid(True, alpha=0.3)
 
     plt.tight_layout()
     os.makedirs('results', exist_ok=True)
-    plt.savefig('results/obstacle_density_comparison.png')
-    print("Saved results/obstacle_density_comparison.png")
+    plt.savefig('results/obstacle_density_comparison_20x20.png')
+    print("Saved results/obstacle_density_comparison_20x20.png")
     plt.close()
 
     print("\n--- Summary ---")
-    print(f"{'Density':<12}{'Obstacles':<12}{'Final Avg Reward':<20}{'Final Avg Steps':<20}")
+    print(f"{'Density':<12}{'Obstacles':<12}{'Attempts':<12}{'Final Avg Reward':<20}{'Final Avg Steps':<20}")
     for density in densities:
         if results[density] is None:
-            print(f"{f'{int(density*100)}%':<12}{'N/A':<12}{'UNSOLVABLE (skipped)':<20}")
+            print(f"{f'{int(density*100)}%':<12}{'N/A':<12}{'N/A':<12}{'UNSOLVABLE (skipped)':<20}")
             continue
         r = np.mean(results[density]['rewards'][-100:])
         s = np.mean(results[density]['steps'][-100:])
         n = len(results[density]['obstacles'])
-        print(f"{f'{int(density*100)}%':<12}{n:<12}{r:<20.2f}{s:<20.2f}")
+        print(f"{f'{int(density*100)}%':<12}{n:<12}{'':<12}{r:<20.2f}{s:<20.2f}")
 
 
 if __name__ == "__main__":
