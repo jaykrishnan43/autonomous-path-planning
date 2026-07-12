@@ -27,7 +27,6 @@ live, publicly deployed interactive web application.
 - Reactive replanning under non-stationary conditions
 
 ## Project Structure
-
 autonomous-path-planning/
 ├── environment/
 │   ├── grid_world.py            Static-obstacle grid environment
@@ -52,7 +51,6 @@ autonomous-path-planning/
 ├── app.py                       Streamlit web application
 ├── main.py                      Main entry point
 └── README.md
-
 ## How It Works
 
 1. **Environment**: A 10x10 grid with a defined start, goal, and obstacles.
