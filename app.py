@@ -35,9 +35,13 @@ st.markdown("""
 .st-key-grid_tab2 div[data-testid="stCheckbox"] label div:first-child {
     margin: 0 !important;
 }
-.st-key-grid_tab2 div[data-testid="stMarkdownContainer"] p,
-.st-key-grid_tab3 div[data-testid="stMarkdownContainer"] p {
-    text-align: center; font-size: 20px; margin: 0 !important;
+.st-key-grid_tab2 div[data-testid="stMarkdownContainer"] {
+    display: flex; justify-content: center; align-items: center;
+    border: 1px solid #444; border-radius: 4px; width: 30px; height: 30px;
+    background-color: #1e1e1e;
+}
+.st-key-grid_tab2 div[data-testid="stMarkdownContainer"] p {
+    margin: 0 !important; font-size: 20px; line-height: 1; text-align: center;
 }
 .st-key-grid_tab3 div[data-testid="stButton"] button {
     width: 32px !important; height: 32px !important;
@@ -165,8 +169,8 @@ def train_live(obstacles):
     return agent.q_table
 
 
-def train_live_waypoint(obstacles, goal, checkpoint):
-    env = GridWorldWaypoint(size=WP_SIZE, start=WP_START, goal=goal,
+def train_live_waypoint(obstacles, start, goal, checkpoint):
+    env = GridWorldWaypoint(size=WP_SIZE, start=start, goal=goal,
                              waypoint=checkpoint, obstacles=obstacles)
     agent = QLearningAgentWaypoint(grid_size=WP_SIZE, action_space=env.action_space)
     for episode in range(WP_EPISODES):
@@ -182,8 +186,8 @@ def train_live_waypoint(obstacles, goal, checkpoint):
     return agent.q_table
 
 
-def get_path_waypoint(q_table, goal, checkpoint, obstacles):
-    env = GridWorldWaypoint(size=WP_SIZE, start=WP_START, goal=goal,
+def get_path_waypoint(q_table, start, goal, checkpoint, obstacles):
+    env = GridWorldWaypoint(size=WP_SIZE, start=start, goal=goal,
                              waypoint=checkpoint, obstacles=obstacles)
     state = env.reset()
     path = [(state[0], state[1])]
@@ -327,21 +331,22 @@ with tab2:
                 plot_area_custom.pyplot(fig, use_container_width=False)
                 plt.close(fig)
 
-# --- TAB 3: Waypoint checkpoint + movable goal, click-to-place, fixed 10x10 ---
+# --- TAB 3: Waypoint checkpoint + movable start/goal, click-to-place, fixed 10x10 ---
 with tab3:
     st.markdown(f"Same {WP_SIZE}x{WP_SIZE} grid. Pick a placement mode below, then click cells "
-                f"to place obstacles, move the goal, or set a checkpoint the agent must "
-                f"touch before the goal counts. 🟢 Start is fixed top-left.")
+                f"to place obstacles, or move the start, goal, and checkpoint.")
 
     if 'wp_obstacles' not in st.session_state:
         st.session_state.wp_obstacles = set()
+    if 'wp_start' not in st.session_state:
+        st.session_state.wp_start = WP_START
     if 'wp_goal' not in st.session_state:
         st.session_state.wp_goal = (9, 9)
     if 'wp_checkpoint' not in st.session_state:
         st.session_state.wp_checkpoint = None
 
     wp_mode = st.radio("Click mode — what does clicking a cell place?",
-                        ["Obstacle", "Goal", "Checkpoint"], horizontal=True, key="wp_mode_radio")
+                        ["Obstacle", "Start", "Goal", "Checkpoint"], horizontal=True, key="wp_mode_radio")
 
     col_grid, col_controls = st.columns([1.2, 1])
 
@@ -352,7 +357,7 @@ with tab3:
                 for c in range(WP_SIZE):
                     cell = (r, c)
                     with cols[c]:
-                        if cell == WP_START:
+                        if cell == st.session_state.wp_start:
                             label = "🟢"
                         elif cell == st.session_state.wp_goal:
                             label = "🔴"
@@ -364,22 +369,32 @@ with tab3:
                             label = "·"
 
                         clicked = st.button(label, key=f"wpbtn_{r}_{c}")
-                        if clicked and cell != WP_START:
+                        if clicked:
                             if wp_mode == "Obstacle":
-                                if cell == st.session_state.wp_goal or cell == st.session_state.wp_checkpoint:
-                                    st.toast("Can't place an obstacle on the goal or checkpoint.")
+                                if cell in (st.session_state.wp_start, st.session_state.wp_goal,
+                                            st.session_state.wp_checkpoint):
+                                    st.toast("Can't place an obstacle on the start, goal, or checkpoint.")
                                 elif cell in st.session_state.wp_obstacles:
                                     st.session_state.wp_obstacles.discard(cell)
                                 else:
                                     st.session_state.wp_obstacles.add(cell)
+                            elif wp_mode == "Start":
+                                if cell == st.session_state.wp_goal or cell == st.session_state.wp_checkpoint:
+                                    st.toast("Can't place Start on the goal or checkpoint.")
+                                else:
+                                    st.session_state.wp_obstacles.discard(cell)
+                                    st.session_state.wp_start = cell
                             elif wp_mode == "Goal":
-                                st.session_state.wp_obstacles.discard(cell)
-                                if st.session_state.wp_checkpoint == cell:
-                                    st.session_state.wp_checkpoint = None
-                                st.session_state.wp_goal = cell
+                                if cell == st.session_state.wp_start:
+                                    st.toast("Can't place Goal on the start.")
+                                else:
+                                    st.session_state.wp_obstacles.discard(cell)
+                                    if st.session_state.wp_checkpoint == cell:
+                                        st.session_state.wp_checkpoint = None
+                                    st.session_state.wp_goal = cell
                             elif wp_mode == "Checkpoint":
-                                if cell == st.session_state.wp_goal:
-                                    st.toast("Can't place a checkpoint on the goal.")
+                                if cell == st.session_state.wp_start or cell == st.session_state.wp_goal:
+                                    st.toast("Can't place a checkpoint on the start or goal.")
                                 else:
                                     st.session_state.wp_obstacles.discard(cell)
                                     if st.session_state.wp_checkpoint == cell:
@@ -390,6 +405,7 @@ with tab3:
 
     with col_controls:
         st.markdown(f"**Obstacles placed:** {len(st.session_state.wp_obstacles)}")
+        st.markdown(f"**Start:** {st.session_state.wp_start}")
         st.markdown(f"**Goal:** {st.session_state.wp_goal}")
         st.markdown(f"**Checkpoint:** {st.session_state.wp_checkpoint if st.session_state.wp_checkpoint else 'None set'}")
 
@@ -405,22 +421,23 @@ with tab3:
 
         if st.button("🚀 Check & Train Agent", type="primary", key="train_tab3"):
             obstacles = list(st.session_state.wp_obstacles)
+            start = st.session_state.wp_start
             goal = st.session_state.wp_goal
             checkpoint = st.session_state.wp_checkpoint
 
-            solvable = (is_solvable(WP_SIZE, WP_START, checkpoint, obstacles) and
+            solvable = (is_solvable(WP_SIZE, start, checkpoint, obstacles) and
                         is_solvable(WP_SIZE, checkpoint, goal, obstacles)) if checkpoint else \
-                       is_solvable(WP_SIZE, WP_START, goal, obstacles)
+                       is_solvable(WP_SIZE, start, goal, obstacles)
 
             if not solvable:
-                st.error("❌ No valid path exists for this layout. Adjust obstacles, goal, or checkpoint.")
+                st.error("❌ No valid path exists for this layout. Adjust obstacles, start, goal, or checkpoint.")
             else:
                 with st.spinner(f"Training agent live ({WP_EPISODES} episodes)..."):
-                    q_table = train_live_waypoint(obstacles, goal, checkpoint)
-                path, reached_goal = get_path_waypoint(q_table, goal, checkpoint, obstacles)
+                    q_table = train_live_waypoint(obstacles, start, goal, checkpoint)
+                path, reached_goal = get_path_waypoint(q_table, start, goal, checkpoint, obstacles)
                 st.session_state.wp_result = {
                     'path': path, 'reached_goal': reached_goal, 'obstacles': obstacles,
-                    'goal': goal, 'checkpoint': checkpoint
+                    'start': start, 'goal': goal, 'checkpoint': checkpoint
                 }
                 st.success(f"✅ Training complete! Path length: {len(path) - 1} steps")
 
@@ -434,13 +451,13 @@ with tab3:
             plot_area_wp = st.empty()
             if play_wp:
                 for i in range(len(result['path'])):
-                    fig = draw_grid(WP_SIZE, result['obstacles'], WP_START, result['goal'],
+                    fig = draw_grid(WP_SIZE, result['obstacles'], result['start'], result['goal'],
                                      result['path'][:i + 1], len(result['path']), checkpoint=result['checkpoint'])
                     plot_area_wp.pyplot(fig, use_container_width=False)
                     plt.close(fig)
                     time.sleep(0.15)
             else:
-                fig = draw_grid(WP_SIZE, result['obstacles'], WP_START, result['goal'],
+                fig = draw_grid(WP_SIZE, result['obstacles'], result['start'], result['goal'],
                                  result['path'], len(result['path']), checkpoint=result['checkpoint'])
                 plot_area_wp.pyplot(fig, use_container_width=False)
                 plt.close(fig)
